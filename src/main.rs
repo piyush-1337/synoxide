@@ -1,5 +1,6 @@
 use std::io::Read;
 
+use synoxide::parse_header;
 use tun::Configuration;
 
 fn main() {
@@ -23,6 +24,13 @@ fn main() {
         let n = dev.read(&mut buf).expect("Failed to read from device");
         let packet = &buf[..n];
 
-        println!("Received {} bytes", packet.len());
+        match parse_header(packet) {
+            Ok(header) => {
+                println!("{:?}", header);
+            },
+            Err(e) => {
+                eprintln!("{e}");
+            },
+        }
     }
 }
