@@ -1,27 +1,4 @@
-use std::{
-    io::{Cursor, Read},
-    ops::{Deref, DerefMut},
-};
-
 use crate::error::{Result, SynoxideError};
-
-pub struct Parser<'a> {
-    inner: Cursor<&'a [u8]>,
-}
-
-impl<'a> DerefMut for Parser<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-impl<'a> Deref for Parser<'a> {
-    type Target = Cursor<&'a [u8]>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
 
 #[derive(Debug)]
 pub struct InternetHeader {
@@ -29,10 +6,13 @@ pub struct InternetHeader {
     pub header_len: u8,
     pub tos: u8,
     pub total_len: u16,
+
+    // These are related to fragments
     pub id: u16,
     pub flags: [bool; 3],
     pub offset: u16,
-    pub time_to_live: u8,
+    pub time_to_live: u8,   // starts with 255 and gets decremented on every hop(router)?
+
     pub protocol: u8,
     pub header_checksum: u16,
     pub source_addr: [u8; 4],
@@ -40,21 +20,21 @@ pub struct InternetHeader {
     pub options_and_padding: Vec<u8>,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(payload: &'a [u8]) -> Self {
-        let inner = Cursor::new(payload);
-        Self { inner }
-    }
+impl InternetHeader {
+    pub fn parse(payload: &[u8]) -> Result<(Self, &[u8])> {
+        if payload.len() < 20 {
+            return Err(SynoxideError::Parse(
+                "Payload too small for standard IPv4 header".to_string()
+            ));
+        }
 
-    pub fn parse_header(&mut self) -> Result<InternetHeader> {
-        let mut byte = [0u8; 1];
-        let mut two_byte = [0u8; 2];
+        let version = payload[0] >> 4;
 
-        self.read_exact(&mut byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-
-        let version = byte[0] >> 4;
-        let header_len = byte[0] & 0x0f;
+        if version != 4 {
+            return Err(SynoxideError::Parse("not an ipv4 packet, skip".to_string()));
+        }
+        
+        let header_len = payload[0] & 0x0f;
 
         if header_len < 5 {
             return Err(SynoxideError::Parse(format!(
@@ -63,60 +43,41 @@ impl<'a> Parser<'a> {
             )));
         }
 
-        self.read_exact(&mut byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-        let tos = byte[0];
+        let tos = payload[1];
 
-        self.read_exact(&mut two_byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-        let total_len = u16::from_be_bytes(two_byte);
+        let total_len = u16::from_be_bytes(payload[2..4].try_into().unwrap());
+        let id = u16::from_be_bytes(payload[4..6].try_into().unwrap());
 
-        self.read_exact(&mut two_byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-        let id = u16::from_be_bytes(two_byte);
-
-        self.read_exact(&mut two_byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-
-        let flags_byte = two_byte[0];
+        let flags_byte = payload[6];
         let flags = [
             (flags_byte & 0x80) != 0,
             (flags_byte & 0x40) != 0,
             (flags_byte & 0x20) != 0,
         ];
 
-        two_byte[0] &= 0x1f;
-        let offset = u16::from_be_bytes(two_byte);
+        let offset_bytes = [payload[6] & 0x1f, payload[7]];
+        let offset = u16::from_be_bytes(offset_bytes);
 
-        self.read_exact(&mut byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-        let time_to_live = byte[0];
+        let time_to_live = payload[8];
+        let protocol = payload[9];
+        let header_checksum = u16::from_be_bytes(payload[10..12].try_into().unwrap());
+        
+        let source_addr: [u8; 4] = payload[12..16].try_into().unwrap();
+        let dest_addr: [u8; 4] = payload[16..20].try_into().unwrap();
 
-        self.read_exact(&mut byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-        let protocol = byte[0];
-
-        self.read_exact(&mut two_byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-        let header_checksum = u16::from_be_bytes(two_byte);
-
-        let mut four_byte = [0u8; 4];
-        self.read_exact(&mut four_byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-        let source_addr = four_byte;
-
-        self.read_exact(&mut four_byte)
-            .map_err(|e| SynoxideError::Parse(e.to_string()))?;
-        let dest_addr = four_byte;
-
-        let options_len = ((header_len as usize) * 4) - 20;
-        let mut options_and_padding = vec![0u8; options_len];
-        if options_len > 0 {
-            self.read_exact(&mut options_and_padding)
-                .map_err(|e| SynoxideError::Parse(e.to_string()))?;
+        let total_header_bytes = (header_len as usize) * 4;
+        
+        if payload.len() < total_header_bytes {
+            return Err(SynoxideError::Parse(
+                "Payload smaller than indicated IHL".to_string()
+            ));
         }
 
-        Ok(InternetHeader {
+        let options_and_padding = payload[20..total_header_bytes].to_vec();
+
+        let remaining_payload = &payload[total_header_bytes..];
+
+        let header = InternetHeader {
             version,
             header_len,
             tos,
@@ -130,6 +91,43 @@ impl<'a> Parser<'a> {
             source_addr,
             dest_addr,
             options_and_padding,
-        })
+        };
+
+        Ok((header, remaining_payload))
+    }
+}
+
+#[derive(Debug)]
+pub struct IcmpHeader {
+    pub icmp_type: u8,
+    pub code: u8,
+    pub checksum: u16,
+    pub identifier: u16,
+    pub sequence_number: u16,
+}
+
+impl IcmpHeader {
+    pub fn parse(payload: &[u8]) -> Result<(Self, &[u8])> {
+        if payload.len() < 8 {
+            return Err(SynoxideError::Parse("Payload too small for ICMP header".to_string()));
+        }
+
+        let icmp_type = payload[0];
+        let code = payload[1];
+        let checksum = u16::from_be_bytes(payload[2..4].try_into().unwrap());
+        let identifier = u16::from_be_bytes(payload[4..6].try_into().unwrap());
+        let sequence_number = u16::from_be_bytes(payload[6..8].try_into().unwrap());
+
+        let remaining_payload = &payload[8..];
+
+        let header = IcmpHeader {
+            icmp_type,
+            code,
+            checksum,
+            identifier,
+            sequence_number,
+        };
+
+        Ok((header, remaining_payload))
     }
 }
