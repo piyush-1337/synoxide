@@ -1,6 +1,7 @@
 use crate::{
     error::{Result, SynoxideError},
-    parser::internet_header::{self, InternetHeader}, utils::calculate_checksum,
+    parser::ip_header::{self, IPHeader},
+    utils::calculate_checksum,
 };
 
 #[derive(Debug)]
@@ -21,12 +22,12 @@ pub enum IcmpPayload {
     },
     DestinationUnreachable {
         unused: u32, // Should be 0
-        original_ip_header: InternetHeader,
+        original_ip_header: IPHeader,
         original_data_prefix: [u8; 8],
     },
     TimeExceeded {
         unused: u32, // Should be 0
-        original_ip_header: InternetHeader,
+        original_ip_header: IPHeader,
         original_data_prefix: [u8; 8],
     },
 }
@@ -55,7 +56,7 @@ pub fn parse(payload: &[u8]) -> Result<IcmpHeader> {
 
         3 => {
             let unused = u32::from_be_bytes(payload[4..8].try_into().unwrap());
-            let ip_header = internet_header::parse(payload)?;
+            let ip_header = ip_header::parse(payload)?;
             let original_ip_header = ip_header.0;
             let original_data_prefix = payload[ip_header.1 + 8..].try_into().unwrap();
 
@@ -68,7 +69,7 @@ pub fn parse(payload: &[u8]) -> Result<IcmpHeader> {
 
         11 => {
             let unused = u32::from_be_bytes(payload[4..8].try_into().unwrap());
-            let ip_header = internet_header::parse(payload)?;
+            let ip_header = ip_header::parse(payload)?;
             let original_ip_header = ip_header.0;
             let original_data_prefix = payload[ip_header.1 + 8..].try_into().unwrap();
 

@@ -1,7 +1,10 @@
-use crate::{error::{Result, SynoxideError}, utils::calculate_checksum};
+use crate::{
+    error::{Result, SynoxideError},
+    utils::calculate_checksum,
+};
 
 #[derive(Debug)]
-pub struct InternetHeader {
+pub struct IPHeader {
     pub version: u8,
     pub header_len: u8,
     pub tos: u8,
@@ -20,7 +23,7 @@ pub struct InternetHeader {
     pub options_and_padding: Vec<u8>,
 }
 
-pub fn parse(payload: &[u8]) -> Result<(InternetHeader, usize)> {
+pub fn parse(payload: &[u8]) -> Result<(IPHeader, usize)> {
     if payload.len() < 20 {
         return Err(SynoxideError::Parse(
             "Payload too small for standard IPv4 header".to_string(),
@@ -74,7 +77,7 @@ pub fn parse(payload: &[u8]) -> Result<(InternetHeader, usize)> {
 
     let options_and_padding = payload[20..total_header_bytes].to_vec();
 
-    let header = InternetHeader {
+    let header = IPHeader {
         version,
         header_len,
         tos,
@@ -93,7 +96,7 @@ pub fn parse(payload: &[u8]) -> Result<(InternetHeader, usize)> {
     Ok((header, total_header_bytes))
 }
 
-impl InternetHeader {
+impl IPHeader {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buffer = Vec::with_capacity((self.header_len * 4) as usize);
 

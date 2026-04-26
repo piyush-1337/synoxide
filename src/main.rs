@@ -24,7 +24,7 @@ fn main() -> anyhow::Result<()> {
         let packet = &buf[..n];
         let mut parser = Parser::new(packet);
 
-        let internet_header = match parser.parse_internet_header() {
+        let ip_header = match parser.parse_ip_header() {
             Ok(header) => header,
             Err(e) => {
                 eprintln!("{e}");
@@ -32,9 +32,9 @@ fn main() -> anyhow::Result<()> {
             }
         };
 
-        println!("internet_header: {:?}", internet_header);
+        println!("ip_header: {:?}", ip_header);
 
-        match internet_header.protocol {
+        match ip_header.protocol {
             1 => {
                 let icmp_header = match parser.parse_icmp_header() {
                     Ok(header) => header,
@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<()> {
                 if let IcmpPayload::Echo { .. } = icmp_header.payload
                     && icmp_header.icmp_type == 8
                 {
-                    let mut reply_ip = internet_header;
+                    let mut reply_ip = ip_header;
                     std::mem::swap(&mut reply_ip.source_addr, &mut reply_ip.dest_addr);
                     reply_ip.recalculate_checksum();
 
@@ -72,7 +72,7 @@ fn main() -> anyhow::Result<()> {
             17 => {
                 println!("udp not implemented")
             }
-            _ => eprintln!("not implemented protocol: {}", internet_header.protocol),
+            _ => eprintln!("not implemented protocol: {}", ip_header.protocol),
         }
     }
 }

@@ -8,7 +8,7 @@ pub fn calculate_checksum(data: &[u8]) -> u16 {
         } else {
             u16::from_be_bytes([data[i], 0])
         };
-        
+
         sum += word as u32;
         i += 2;
     }
