@@ -70,7 +70,8 @@ fn main() -> anyhow::Result<()> {
             }
 
             17 => {
-                println!("udp not implemented")
+                let udp_header = parser.parse_udp_header()?;
+                println!("{:?}", udp_header)
             }
             _ => eprintln!("not implemented protocol: {}", ip_header.protocol),
         }
