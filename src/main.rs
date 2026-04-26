@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use synoxide::{parse_icmp_header, parse_internet_header};
+use synoxide::Parser;
 use tun::Configuration;
 
 fn main() -> anyhow::Result<()> {
@@ -17,14 +17,14 @@ fn main() -> anyhow::Result<()> {
     });
 
     let mut dev = tun::create(&config).expect("Failed to create TUN device");
-
     let mut buf = [0u8; 1504];
 
     loop {
         let n = dev.read(&mut buf).expect("Failed to read from device");
         let packet = &buf[..n];
+        let mut parser = Parser::new(packet);
 
-        let (internet_header, remaining) = match parse_internet_header(packet) {
+        let internet_header = match parser.parse_internet_header() {
             Ok(header) => header,
             Err(e) => {
                 eprintln!("{e}");
@@ -36,7 +36,7 @@ fn main() -> anyhow::Result<()> {
 
         match internet_header.protocol {
             1 => {
-                let (icmp_header, remaining) = match parse_icmp_header(remaining) {
+                let icmp_header = match parser.parse_icmp_header() {
                     Ok(header) => header,
                     Err(e) => {
                         eprintln!("{e}");

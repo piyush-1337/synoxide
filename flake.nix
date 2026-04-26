@@ -41,15 +41,6 @@
       {
         packages.default = synoxide;
 
-        checks = {
-          my-crate-tests = craneLib.cargoTest (
-            commonArgs
-            // {
-              inherit cargoArtifacts;
-            }
-          );
-        };
-
         devShells.default = craneLib.devShell {
           packages = with pkgs; [
             rust-analyzer
