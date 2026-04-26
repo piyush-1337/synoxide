@@ -3,8 +3,10 @@ pub mod internet_header;
 
 use crate::{
     error::{Result, SynoxideError},
-    parser::{icmp_header::IcmpHeader, internet_header::InternetHeader},
 };
+
+pub use icmp_header::{IcmpHeader, IcmpPayload};
+pub use internet_header::InternetHeader;
 
 #[derive(Debug, Default)]
 pub struct Parser<'a> {

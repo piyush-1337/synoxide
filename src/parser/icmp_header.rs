@@ -1,6 +1,6 @@
 use crate::{
     error::{Result, SynoxideError},
-    parser::internet_header::{self, InternetHeader},
+    parser::internet_header::{self, InternetHeader}, utils::calculate_checksum,
 };
 
 #[derive(Debug)]
@@ -93,4 +93,40 @@ pub fn parse(payload: &[u8]) -> Result<IcmpHeader> {
         checksum,
         payload,
     })
+}
+
+impl IcmpHeader {
+    pub fn recalculate_checksum(&mut self) {
+        self.checksum = 0;
+        let checksum = calculate_checksum(&self.to_bytes());
+        self.checksum = checksum;
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+
+        buffer.push(self.icmp_type);
+        buffer.push(self.code);
+        buffer.extend_from_slice(&self.checksum.to_be_bytes());
+
+        match &self.payload {
+            IcmpPayload::Echo {
+                identifier,
+                sequence_number,
+                data,
+            } => {
+                buffer.extend_from_slice(&identifier.to_be_bytes());
+                buffer.extend_from_slice(&sequence_number.to_be_bytes());
+                buffer.extend_from_slice(data);
+            }
+            IcmpPayload::DestinationUnreachable { .. } => {
+                unimplemented!("Serialization for DestinationUnreachable not yet needed");
+            }
+            IcmpPayload::TimeExceeded { .. } => {
+                unimplemented!("Serialization for TimeExceeded not yet needed");
+            }
+        }
+
+        buffer
+    }
 }

@@ -1,4 +1,4 @@
-use crate::error::{Result, SynoxideError};
+use crate::{error::{Result, SynoxideError}, utils::calculate_checksum};
 
 #[derive(Debug)]
 pub struct InternetHeader {
@@ -91,4 +91,46 @@ pub fn parse(payload: &[u8]) -> Result<(InternetHeader, usize)> {
     };
 
     Ok((header, total_header_bytes))
+}
+
+impl InternetHeader {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buffer = Vec::with_capacity((self.header_len * 4) as usize);
+
+        buffer.push((self.version << 4) | (self.header_len & 0x0F));
+        buffer.push(self.tos);
+        buffer.extend_from_slice(&self.total_len.to_be_bytes());
+        buffer.extend_from_slice(&self.id.to_be_bytes());
+
+        let mut flags_byte = 0u8;
+        if self.flags[0] {
+            flags_byte |= 0x80;
+        }
+        if self.flags[1] {
+            flags_byte |= 0x40;
+        }
+        if self.flags[2] {
+            flags_byte |= 0x20;
+        }
+
+        let offset_top = ((self.offset >> 8) as u8) & 0x1F;
+
+        buffer.push(flags_byte | offset_top);
+        buffer.push((self.offset & 0xFF) as u8);
+        buffer.push(self.time_to_live);
+        buffer.push(self.protocol);
+
+        buffer.extend_from_slice(&self.header_checksum.to_be_bytes());
+        buffer.extend_from_slice(&self.source_addr);
+        buffer.extend_from_slice(&self.dest_addr);
+        buffer.extend_from_slice(&self.options_and_padding);
+
+        buffer
+    }
+
+    pub fn recalculate_checksum(&mut self) {
+        self.header_checksum = 0;
+        let header_checksum = calculate_checksum(&self.to_bytes());
+        self.header_checksum = header_checksum;
+    }
 }

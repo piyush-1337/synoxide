@@ -1,6 +1,6 @@
-use std::io::Read;
+use std::io::{Read, Write};
 
-use synoxide::Parser;
+use synoxide::{IcmpPayload, Parser};
 use tun::Configuration;
 
 fn main() -> anyhow::Result<()> {
@@ -45,6 +45,24 @@ fn main() -> anyhow::Result<()> {
                 };
 
                 println!("icmp_header: {:?}", icmp_header);
+
+                if let IcmpPayload::Echo { .. } = icmp_header.payload
+                    && icmp_header.icmp_type == 8
+                {
+                    let mut reply_ip = internet_header;
+                    std::mem::swap(&mut reply_ip.source_addr, &mut reply_ip.dest_addr);
+                    reply_ip.recalculate_checksum();
+
+                    let mut reply_icmp = icmp_header;
+                    reply_icmp.icmp_type = 0;
+                    reply_icmp.recalculate_checksum();
+
+                    let mut final_reply = reply_ip.to_bytes();
+                    final_reply.extend(reply_icmp.to_bytes());
+
+                    dev.write_all(&final_reply)?;
+                    println!("sent echo reply");
+                }
             }
 
             6 => {
