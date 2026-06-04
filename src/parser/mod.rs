@@ -1,10 +1,11 @@
 pub mod icmp_header;
 pub mod ip_header;
 pub mod udp;
+pub mod tcp;
 
 use crate::{
     error::{Result, SynoxideError},
-    parser::udp::UDPHeader,
+    parser::{tcp::TCPHeader, udp::UDPHeader},
 };
 
 pub use icmp_header::{IcmpHeader, IcmpPayload};
@@ -32,6 +33,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_icmp_header(&mut self) -> Result<IcmpHeader> {
+        // TODO: no need to parse ip header first, just parse the offset (header[0] * 4) and continue
         let Some(ip_header_end) = self.ip_header_end else {
             return Err(SynoxideError::Parse(
                 "Please parse internet_header first".to_string(),
@@ -43,6 +45,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_udp_header(&mut self) -> Result<UDPHeader> {
+        // TODO: no need to parse ip header first, just parse the offset (header[0] * 4) and continue
         let Some(ip_header_end) = self.ip_header_end else {
             return Err(SynoxideError::Parse(
                 "Please parse internet_header first".to_string(),
@@ -52,4 +55,16 @@ impl<'a> Parser<'a> {
         let header = udp::parse(&self.payload[ip_header_end..])?;
         Ok(header)
     }
+
+    pub fn parse_tcp_header(&mut self) -> Result<TCPHeader> {
+        // TODO: no need to parse ip header first, just parse the offset (header[0] * 4) and continue
+        let Some(ip_header_end) = self.ip_header_end else {
+            return Err(SynoxideError::Parse(
+                "Please parse internet_header first".to_string(),
+            ));
+        };
+
+        let header = tcp::parse(&self.payload[ip_header_end..])?;
+        Ok(header)
+    } 
 }

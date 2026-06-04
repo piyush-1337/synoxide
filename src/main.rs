@@ -66,14 +66,16 @@ fn main() -> anyhow::Result<()> {
             }
 
             6 => {
-                println!("tcp not implemented")
+                let tcp_header = parser.parse_tcp_header()?;
+                println!("{:?}", tcp_header)
             }
 
             17 => {
                 let udp_header = parser.parse_udp_header()?;
                 println!("{:?}", udp_header)
             }
-            _ => eprintln!("not implemented protocol: {}", ip_header.protocol),
+
+            protocol => eprintln!("not implemented protocol: {}", protocol),
         }
     }
 }
