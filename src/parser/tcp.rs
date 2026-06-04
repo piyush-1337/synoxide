@@ -2,22 +2,22 @@ use crate::error::{Result, SynoxideError};
 
 #[derive(Debug)]
 pub struct TCPHeader<'a> {
-    src_port: u16,
-    dest_port: u16,
-    seq_nu: u32,
-    ack_nu: u32,
+    pub src_port: u16,
+    pub dest_port: u16,
+    pub seq_nu: u32,
+    pub ack_nu: u32,
     /// actually 4 bits
-    data_offset: u8,
+    pub data_offset: u8,
     /// actually 4 bits
-    reserved: u8,
-    control_bits: [bool; 8],
-    window: u16,
-    checksum: u16,
-    urgent_pointer: u16,
-    options: &'a [u8],
+    pub reserved: u8,
+    pub control_bits: [bool; 8],
+    pub window: u16,
+    pub checksum: u16,
+    pub urgent_pointer: u16,
+    pub options: &'a [u8],
 }
 
-pub fn parse(payload: &[u8]) -> Result<TCPHeader> {
+pub fn parse(payload: &'_ [u8]) -> Result<TCPHeader<'_>> {
     if payload.len() < 20 {
         return Err(SynoxideError::Parse(format!(
             "tcp header size must be at least 20 bytes, received: {} bytes",

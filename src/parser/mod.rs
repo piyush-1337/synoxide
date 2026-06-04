@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
         Ok(header)
     }
 
-    pub fn parse_tcp_header(&mut self) -> Result<TCPHeader> {
+    pub fn parse_tcp_header(&'_ mut self) -> Result<TCPHeader<'_>> {
         // TODO: no need to parse ip header first, just parse the offset (header[0] * 4) and continue
         let Some(ip_header_end) = self.ip_header_end else {
             return Err(SynoxideError::Parse(

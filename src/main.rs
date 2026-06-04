@@ -16,11 +16,11 @@ fn main() -> anyhow::Result<()> {
         config.ensure_root_privileges(true);
     });
 
-    let mut dev = tun::create(&config).expect("Failed to create TUN device");
+    let mut dev = tun::create(&config)?;
     let mut buf = [0u8; 1504];
 
     loop {
-        let n = dev.read(&mut buf).expect("Failed to read from device");
+        let n = dev.read(&mut buf)?;
         let packet = &buf[..n];
         let mut parser = Parser::new(packet);
 
