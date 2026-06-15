@@ -5,7 +5,7 @@ pub mod tcp;
 
 use crate::{
     error::{Result, SynoxideError},
-    parser::{tcp::TCPHeader, udp::UDPHeader},
+    parser::{tcp::TcpHeader, udp::UDPHeader},
 };
 
 pub use icmp_header::{IcmpHeader, IcmpPayload};
@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
         Ok(header)
     }
 
-    pub fn parse_tcp_header(&'_ mut self) -> Result<TCPHeader<'_>> {
+    pub fn parse_tcp_header(&'_ mut self) -> Result<TcpHeader<'_>> {
         // TODO: no need to parse ip header first, just parse the offset (header[0] * 4) and continue
         let Some(ip_header_end) = self.ip_header_end else {
             return Err(SynoxideError::Parse(
