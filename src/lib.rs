@@ -1,5 +1,5 @@
 mod error;
-mod parser;
+pub mod parser;
 pub mod utils;
 pub mod tcp;
 

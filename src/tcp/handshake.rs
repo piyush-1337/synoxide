@@ -1,58 +1,82 @@
+use std::io::Write;
 use crate::{
     IPHeader,
     parser::tcp::{PseudoIpHeader, TcpHeader},
-    tcp::{RecvState, SendState, TcpState, TcpStateMode, handle::TcpHandle},
+    tcp::{RecvState, SendState, TcpState, TcpStateMode},
     utils::calculate_checksum,
 };
 
 pub fn handshake(
-    mut ip_header: IPHeader,
-    mut tcp_header: TcpHeader,
-    dev: tun::Device,
-) -> TcpHandle {
-    let mode = TcpStateMode::SynReceived;
+    ip_header: &IPHeader,
+    tcp_header: &TcpHeader,
+    writer: &mut dyn Write,
+) -> std::io::Result<TcpState> {
     let send = SendState {
-        wnd: tcp_header.window,
         iss: 10000,
-        una: 10000,
         nxt: 10001,
-        ..Default::default()
     };
     let recv = RecvState {
         nxt: tcp_header.seq_nu + 1,
         irs: tcp_header.seq_nu,
-        ..Default::default()
     };
-    let state = TcpState { mode, send, recv };
+    let state = TcpState {
+        mode: TcpStateMode::SynReceived,
+        send,
+        recv,
+    };
 
-    std::mem::swap(&mut ip_header.source_addr, &mut ip_header.dest_addr);
-    std::mem::swap(&mut tcp_header.src_port, &mut tcp_header.dest_port);
-    tcp_header.seq_nu = send.iss;
-    tcp_header.ack_nu = recv.nxt;
+    let tcp_header_len: u16 = 20;
 
-    let tcp_header_len = 20 + tcp_header.options.len() as u16;
-
-    let pseudo_ip_header = PseudoIpHeader::new(
-        u32::from_be_bytes(ip_header.source_addr),
+    let pseudo = PseudoIpHeader::new(
         u32::from_be_bytes(ip_header.dest_addr),
+        u32::from_be_bytes(ip_header.source_addr),
         tcp_header_len,
     );
 
-    tcp_header.checksum = 0;
-    tcp_header.control_bits.syn = true;
-    tcp_header.control_bits.ack = true;
-    tcp_header.data_offset = (tcp_header_len / 4) as u8;
+    let mut reply_tcp = TcpHeader {
+        src_port: tcp_header.dest_port,
+        dest_port: tcp_header.src_port,
+        seq_nu: send.iss,
+        ack_nu: recv.nxt,
+        data_offset: (tcp_header_len / 4) as u8,
+        reserved: 0,
+        control_bits: crate::parser::tcp::ControlBits {
+            cwr: false, ece: false, urg: false,
+            ack: true, psh: false, rst: false, syn: true, fin: false,
+        },
+        window: 10000,
+        checksum: 0,
+        urgent_pointer: 0,
+        options: &[],
+    };
 
-    let mut buf = Vec::with_capacity(12 + tcp_header_len as usize);
-    buf.extend_from_slice(&pseudo_ip_header.to_bytes());
-    buf.extend_from_slice(&tcp_header.to_bytes());
+    let mut cksum_buf = Vec::with_capacity(12 + tcp_header_len as usize);
+    cksum_buf.extend_from_slice(&pseudo.to_bytes());
+    cksum_buf.extend_from_slice(&reply_tcp.to_bytes());
 
-    let checksum = calculate_checksum(&buf);
-    tcp_header.checksum = checksum;
-    let checksum = checksum.to_be_bytes();
-    buf[28] = checksum[0];
-    buf[29] = checksum[1];
+    reply_tcp.checksum = calculate_checksum(&cksum_buf);
 
+    let mut reply_ip = IPHeader {
+        version: 4,
+        header_len: 5,
+        tos: 0,
+        total_len: 20 + tcp_header_len,
+        id: 0,
+        flags: [false, false, false],
+        offset: 0,
+        time_to_live: 64,
+        protocol: 6,
+        header_checksum: 0,
+        source_addr: ip_header.dest_addr,
+        dest_addr: ip_header.source_addr,
+        options_and_padding: vec![],
+    };
+    reply_ip.recalculate_checksum();
 
-    unimplemented!()
+    let mut final_reply = reply_ip.to_bytes();
+    final_reply.extend(reply_tcp.to_bytes());
+
+    writer.write_all(&final_reply)?;
+
+    Ok(state)
 }
